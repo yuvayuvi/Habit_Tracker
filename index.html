@@ -1,0 +1,1004 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Habit Tracker</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-900 min-h-screen flex justify-center">
+  <!-- Mobile App Shell -->
+  <div id="app-shell" class="w-full max-w-md bg-white min-h-screen flex flex-col shadow-xl relative overflow-x-hidden">
+    <!-- Top App Bar -->
+    <header class="sticky top-0 z-30 bg-indigo-600 text-white px-4 h-14 flex items-center justify-between shadow-sm">
+      <div class="flex items-center gap-3">
+        <button id="menu-btn" type="button" aria-label="Open Menu" class="p-2 -ml-2 rounded-full hover:bg-indigo-500 active:bg-indigo-700 transition">
+          <i data-lucide="menu" class="w-5 h-5"></i>
+        </button>
+        <h1 id="top-bar-title" class="text-lg font-semibold tracking-tight">Habit Tracker</h1>
+      </div>
+      <div id="top-bar-actions" class="flex items-center gap-1"></div>
+    </header>
+
+    <!-- Slide-out Navigation Drawer -->
+    <div id="drawer-backdrop" class="fixed inset-0 bg-slate-900/40 z-40 hidden transition-opacity"></div>
+    <aside id="nav-drawer" class="fixed top-0 left-0 bottom-0 w-72 max-w-[80vw] bg-white z-50 transform -translate-x-full transition-transform duration-200 ease-out shadow-2xl flex flex-col">
+      <div class="bg-indigo-600 text-white px-5 pt-10 pb-5">
+        <div class="w-11 h-11 rounded-2xl bg-white/20 flex items-center justify-center mb-3">
+          <i data-lucide="check-circle-2" class="w-6 h-6 text-white"></i>
+        </div>
+        <div class="text-lg font-bold">Habit Tracker</div>
+        <div class="text-xs text-indigo-100 mt-0.5">Daily routines &amp; progress</div>
+      </div>
+      <nav class="p-3 space-y-1 flex-1">
+        <button type="button" data-screen="Dashboard" class="drawer-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition">
+          <i data-lucide="calendar-days" class="w-5 h-5"></i>
+          <span>Dashboard</span>
+        </button>
+        <button type="button" data-screen="ManageHabits" class="drawer-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition">
+          <i data-lucide="list-checks" class="w-5 h-5"></i>
+          <span>Manage Habits</span>
+        </button>
+        <button type="button" data-screen="Analytics" class="drawer-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition">
+          <i data-lucide="bar-chart-3" class="w-5 h-5"></i>
+          <span>Analytics</span>
+        </button>
+        <button type="button" data-screen="Export" class="drawer-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition">
+          <i data-lucide="download" class="w-5 h-5"></i>
+          <span>Export &amp; Backup</span>
+        </button>
+      </nav>
+      <div class="p-4 border-t border-slate-100 text-xs text-slate-400">
+        Saved locally on this device
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main id="main-content" class="flex-1 overflow-y-auto pb-20 bg-slate-50"></main>
+
+    <!-- Bottom Navigation Bar -->
+    <nav class="sticky bottom-0 z-30 bg-white border-t border-slate-200 grid grid-cols-4 h-16">
+      <button type="button" data-screen="Dashboard" class="bottom-nav-item flex flex-col items-center justify-center gap-1 text-xs font-medium transition">
+        <i data-lucide="calendar-days" class="w-5 h-5"></i>
+        <span>Dashboard</span>
+      </button>
+      <button type="button" data-screen="ManageHabits" class="bottom-nav-item flex flex-col items-center justify-center gap-1 text-xs font-medium transition">
+        <i data-lucide="list-checks" class="w-5 h-5"></i>
+        <span>Habits</span>
+      </button>
+      <button type="button" data-screen="Analytics" class="bottom-nav-item flex flex-col items-center justify-center gap-1 text-xs font-medium transition">
+        <i data-lucide="bar-chart-3" class="w-5 h-5"></i>
+        <span>Analytics</span>
+      </button>
+      <button type="button" data-screen="Export" class="bottom-nav-item flex flex-col items-center justify-center gap-1 text-xs font-medium transition">
+        <i data-lucide="download" class="w-5 h-5"></i>
+        <span>Export</span>
+      </button>
+    </nav>
+
+    <!-- Add / Edit Habit Modal -->
+    <div id="habit-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 p-4">
+      <div class="bg-white rounded-2xl w-full max-w-sm p-5 shadow-2xl">
+        <h2 id="habit-modal-title" class="text-lg font-semibold text-slate-900 mb-4">Add New Habit</h2>
+        <form id="habit-form" class="space-y-4">
+          <div>
+            <label for="habit-name-input" class="block text-xs font-medium text-slate-600 mb-1">Habit Name</label>
+            <input id="habit-name-input" type="text" required maxlength="80" placeholder="e.g., Morning Exercise"
+              class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+          </div>
+          <div>
+            <span class="block text-xs font-medium text-slate-600 mb-2">Color Tag</span>
+            <div id="color-picker" class="flex flex-wrap gap-2.5"></div>
+          </div>
+          <div class="flex justify-end gap-2 pt-2">
+            <button id="habit-modal-cancel" type="button" class="px-4 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100">Cancel</button>
+            <button type="submit" class="px-4 py-2 rounded-xl text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="delete-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 p-4">
+      <div class="bg-white rounded-2xl w-full max-w-sm p-5 shadow-2xl">
+        <h2 class="text-lg font-semibold text-slate-900 mb-2">Delete Habit</h2>
+        <p id="delete-modal-text" class="text-sm text-slate-600 mb-5">Are you sure you want to delete this habit and its logs?</p>
+        <div class="flex justify-end gap-2">
+          <button id="delete-modal-cancel" type="button" class="px-4 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100">Cancel</button>
+          <button id="delete-modal-confirm" type="button" class="px-4 py-2 rounded-xl text-sm font-medium bg-rose-600 text-white hover:bg-rose-700">Delete</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white text-xs font-medium px-4 py-2.5 rounded-full shadow-lg opacity-0 pointer-events-none transition-opacity duration-200"></div>
+  </div>
+
+  <script>
+    (function () {
+      const STORAGE_KEY = 'uv_habit_tracker_v1';
+      const COLORS = [
+        '#4F46E5', '#10B981', '#F59E0B', '#EF4444',
+        '#8B5CF6', '#06B6D4', '#EC4899', '#14B8A6'
+      ];
+      const MONTH_NAMES = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
+      ];
+      const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+      function toIsoDate(d) {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+      }
+
+      function parseIsoDate(str) {
+        const [y, m, d] = str.split('-').map(Number);
+        return new Date(y, m - 1, d);
+      }
+
+      function formatDisplayDate(iso) {
+        const d = parseIsoDate(iso);
+        return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+      }
+
+      const today = new Date();
+      const todayIso = toIsoDate(today);
+
+      const DEFAULT_DATA = {
+        habits: [
+          { id: 1, name: 'Exercise or physical activity', color: '#10B981', createdAt: todayIso, displayOrder: 0 },
+          { id: 2, name: 'Write diary', color: '#4F46E5', createdAt: todayIso, displayOrder: 1 },
+          { id: 3, name: 'Meditation', color: '#8B5CF6', createdAt: todayIso, displayOrder: 2 },
+          { id: 4, name: 'Read books and articles', color: '#06B6D4', createdAt: todayIso, displayOrder: 3 },
+          { id: 5, name: 'Have healthy morning drink', color: '#F59E0B', createdAt: todayIso, displayOrder: 4 }
+        ],
+        logs: []
+      };
+
+      function loadData() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return JSON.parse(JSON.stringify(DEFAULT_DATA));
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed.habits) && Array.isArray(parsed.logs)) {
+            return parsed;
+          }
+        } catch (e) { /* fallback */ }
+        return JSON.parse(JSON.stringify(DEFAULT_DATA));
+      }
+
+      function saveData() {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(state.data));
+        } catch (e) { /* ignore storage quota errors */ }
+      }
+
+      const state = {
+        screen: 'Dashboard',
+        data: loadData(),
+        selectedDate: todayIso,
+        calendarYear: today.getFullYear(),
+        calendarMonth: today.getMonth(),
+        analyticsHabitId: null, // null = All Habits
+        analyticsIsYearly: false,
+        analyticsYear: today.getFullYear(),
+        analyticsMonth: today.getMonth(),
+        exportIsYearly: false,
+        exportPeriod: `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`,
+        editingHabitId: null,
+        deletingHabitId: null,
+        modalColor: COLORS[0],
+        pieChart: null,
+        barChart: null
+      };
+
+      function showToast(msg) {
+        const el = document.getElementById('toast');
+        el.textContent = msg;
+        el.classList.remove('opacity-0');
+        el.classList.add('opacity-100');
+        clearTimeout(state._toastTimer);
+        state._toastTimer = setTimeout(() => {
+          el.classList.remove('opacity-100');
+          el.classList.add('opacity-0');
+        }, 2500);
+      }
+
+      function sortedHabits() {
+        return [...state.data.habits].sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0) || a.id - b.id);
+      }
+
+      function isHabitCompletedOn(habitId, dateIso) {
+        return state.data.logs.some(l => l.habitId === habitId && l.date === dateIso && l.isCompleted);
+      }
+
+      function toggleHabitCompletion(habitId, dateIso) {
+        if (dateIso > todayIso) return;
+        const idx = state.data.logs.findIndex(l => l.habitId === habitId && l.date === dateIso);
+        if (idx >= 0) {
+          state.data.logs.splice(idx, 1);
+        } else {
+          const nextLogId = state.data.logs.reduce((m, l) => Math.max(m, l.logId || 0), 0) + 1;
+          state.data.logs.push({ logId: nextLogId, habitId, date: dateIso, isCompleted: true });
+        }
+        saveData();
+        render();
+      }
+
+      function getDayCompletionInfo(dateIso) {
+        const habits = state.data.habits;
+        if (habits.length === 0) return { completed: 0, total: 0, allDone: false };
+        let completed = 0;
+        for (const h of habits) {
+          if (isHabitCompletedOn(h.id, dateIso)) completed++;
+        }
+        return { completed, total: habits.length, allDone: completed === habits.length };
+      }
+
+      // Drawer controls
+      const drawer = document.getElementById('nav-drawer');
+      const backdrop = document.getElementById('drawer-backdrop');
+      function openDrawer() {
+        backdrop.classList.remove('hidden');
+        drawer.classList.remove('-translate-x-full');
+      }
+      function closeDrawer() {
+        backdrop.classList.add('hidden');
+        drawer.classList.add('-translate-x-full');
+      }
+      document.getElementById('menu-btn').addEventListener('click', openDrawer);
+      backdrop.addEventListener('click', closeDrawer);
+
+      document.querySelectorAll('[data-screen]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          state.screen = btn.getAttribute('data-screen');
+          closeDrawer();
+          render();
+        });
+      });
+
+      // Habit Modal
+      const habitModal = document.getElementById('habit-modal');
+      const habitNameInput = document.getElementById('habit-name-input');
+      const colorPickerEl = document.getElementById('color-picker');
+
+      function renderColorPicker() {
+        colorPickerEl.innerHTML = COLORS.map(c => `
+          <button type="button" data-color="${c}" class="w-8 h-8 rounded-full border-2 transition flex items-center justify-center ${state.modalColor === c ? 'border-slate-900 scale-110' : 'border-transparent'}" style="background-color:${c}">
+            ${state.modalColor === c ? '<i data-lucide="check" class="w-4 h-4 text-white"></i>' : ''}
+          </button>
+        `).join('');
+        colorPickerEl.querySelectorAll('button').forEach(b => {
+          b.addEventListener('click', () => {
+            state.modalColor = b.getAttribute('data-color');
+            renderColorPicker();
+            if (window.lucide) lucide.createIcons();
+          });
+        });
+      }
+
+      function openHabitModal(habit) {
+        state.editingHabitId = habit ? habit.id : null;
+        state.modalColor = habit ? habit.color : COLORS[state.data.habits.length % COLORS.length];
+        document.getElementById('habit-modal-title').textContent = habit ? 'Edit Habit' : 'Add New Habit';
+        habitNameInput.value = habit ? habit.name : '';
+        renderColorPicker();
+        habitModal.classList.remove('hidden');
+        habitModal.classList.add('flex');
+        if (window.lucide) lucide.createIcons();
+        setTimeout(() => habitNameInput.focus(), 50);
+      }
+
+      function closeHabitModal() {
+        habitModal.classList.add('hidden');
+        habitModal.classList.remove('flex');
+      }
+
+      document.getElementById('habit-modal-cancel').addEventListener('click', closeHabitModal);
+      document.getElementById('habit-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const name = habitNameInput.value.trim();
+        if (!name) return;
+        if (state.editingHabitId !== null) {
+          const h = state.data.habits.find(x => x.id === state.editingHabitId);
+          if (h) {
+            h.name = name;
+            h.color = state.modalColor;
+          }
+          showToast('Habit updated');
+        } else {
+          const nextId = state.data.habits.reduce((m, x) => Math.max(m, x.id), 0) + 1;
+          const nextOrder = state.data.habits.reduce((m, x) => Math.max(m, x.displayOrder ?? 0), -1) + 1;
+          state.data.habits.push({
+            id: nextId,
+            name,
+            color: state.modalColor,
+            createdAt: todayIso,
+            displayOrder: nextOrder
+          });
+          showToast('Habit added');
+        }
+        saveData();
+        closeHabitModal();
+        render();
+      });
+
+      // Delete Modal
+      const deleteModal = document.getElementById('delete-modal');
+      function openDeleteModal(habit) {
+        state.deletingHabitId = habit.id;
+        document.getElementById('delete-modal-text').textContent = `Delete "${habit.name}" and all its tracked logs?`;
+        deleteModal.classList.remove('hidden');
+        deleteModal.classList.add('flex');
+      }
+      function closeDeleteModal() {
+        deleteModal.classList.add('hidden');
+        deleteModal.classList.remove('flex');
+      }
+      document.getElementById('delete-modal-cancel').addEventListener('click', closeDeleteModal);
+      document.getElementById('delete-modal-confirm').addEventListener('click', () => {
+        if (state.deletingHabitId !== null) {
+          state.data.habits = state.data.habits.filter(h => h.id !== state.deletingHabitId);
+          state.data.logs = state.data.logs.filter(l => l.habitId !== state.deletingHabitId);
+          if (state.analyticsHabitId === state.deletingHabitId) state.analyticsHabitId = null;
+          saveData();
+          showToast('Habit deleted');
+        }
+        closeDeleteModal();
+        render();
+      });
+
+      // Analytics calculation
+      function computeAnalytics(habitId, isYearly, year, month) {
+        const habits = habitId === null ? state.data.habits : state.data.habits.filter(h => h.id === habitId);
+        const habitCount = habits.length;
+        if (habitCount === 0) {
+          return { completed: 0, incomplete: 0, upcoming: 0, currentStreak: 0, bestStreak: 0, monthlyBreakdown: [] };
+        }
+
+        let completed = 0;
+        let incomplete = 0;
+        let upcoming = 0;
+        const monthlyBreakdown = [];
+
+        const monthsToEvaluate = isYearly ? [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] : [month];
+        for (const m of monthsToEvaluate) {
+          const daysInMonth = new Date(year, m + 1, 0).getDate();
+          let mComp = 0, mInc = 0, mUpc = 0;
+          for (let d = 1; d <= daysInMonth; d++) {
+            const iso = `${year}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+            if (iso > todayIso) {
+              mUpc += habitCount;
+            } else {
+              let dayComp = 0;
+              for (const h of habits) {
+                if (isHabitCompletedOn(h.id, iso)) dayComp++;
+              }
+              mComp += dayComp;
+              mInc += (habitCount - dayComp);
+            }
+          }
+          completed += mComp;
+          incomplete += mInc;
+          upcoming += mUpc;
+          monthlyBreakdown.push({ month: m, completed: mComp, incomplete: mInc, upcoming: mUpc });
+        }
+
+        // Streaks: consecutive days up to today where all selected habits were completed
+        let currentStreak = 0;
+        let bestStreak = 0;
+        let running = 0;
+        // Scan last 365 days up to today
+        const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 364);
+        for (let i = 0; i < 365; i++) {
+          const cur = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+          const iso = toIsoDate(cur);
+          const allDone = habits.every(h => isHabitCompletedOn(h.id, iso));
+          if (allDone) {
+            running++;
+            if (running > bestStreak) bestStreak = running;
+          } else {
+            if (iso < todayIso) running = 0;
+          }
+        }
+        // Current streak: count backwards from today (or yesterday if today isn't finished yet)
+        let checkDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const todayDone = habits.every(h => isHabitCompletedOn(h.id, toIsoDate(checkDate)));
+        if (!todayDone) {
+          checkDate = new Date(checkDate.getFullYear(), checkDate.getMonth(), checkDate.getDate() - 1);
+        }
+        for (let i = 0; i < 365; i++) {
+          const iso = toIsoDate(new Date(checkDate.getFullYear(), checkDate.getMonth(), checkDate.getDate() - i));
+          if (habits.every(h => isHabitCompletedOn(h.id, iso))) {
+            currentStreak++;
+          } else {
+            break;
+          }
+        }
+        if (currentStreak > bestStreak) bestStreak = currentStreak;
+
+        return { completed, incomplete, upcoming, currentStreak, bestStreak, monthlyBreakdown };
+      }
+
+      // Render Screens
+      function renderDashboard(main) {
+        const y = state.calendarYear;
+        const m = state.calendarMonth;
+        const firstDay = new Date(y, m, 1).getDay();
+        const daysInMonth = new Date(y, m + 1, 0).getDate();
+
+        let cellsHtml = '';
+        for (let i = 0; i < firstDay; i++) {
+          cellsHtml += `<div class="h-10"></div>`;
+        }
+        for (let d = 1; d <= daysInMonth; d++) {
+          const iso = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+          const isFuture = iso > todayIso;
+          const isSelected = iso === state.selectedDate;
+          const isToday = iso === todayIso;
+          const info = getDayCompletionInfo(iso);
+
+          let bgClass = 'bg-white text-slate-700 hover:bg-slate-100';
+          if (isFuture) {
+            bgClass = 'bg-slate-50 text-slate-300 cursor-not-allowed';
+          } else if (isSelected) {
+            bgClass = 'bg-indigo-600 text-white font-semibold shadow-sm';
+          } else if (info.allDone && info.total > 0) {
+            bgClass = 'bg-emerald-100 text-emerald-800 font-semibold';
+          } else if (info.completed > 0) {
+            bgClass = 'bg-amber-50 text-amber-800 font-medium';
+          }
+
+          const ringClass = isToday && !isSelected ? 'ring-2 ring-indigo-400' : '';
+          const dotHtml = !isFuture && info.total > 0 && !isSelected
+            ? `<span class="w-1.5 h-1.5 rounded-full mt-0.5 ${info.allDone ? 'bg-emerald-500' : info.completed > 0 ? 'bg-amber-400' : 'bg-transparent'}"></span>`
+            : `<span class="w-1.5 h-1.5 mt-0.5"></span>`;
+
+          cellsHtml += `
+            <button type="button" data-date="${iso}" ${isFuture ? 'disabled' : ''}
+              class="cal-day h-10 rounded-xl flex flex-col items-center justify-center text-xs transition ${bgClass} ${ringClass}">
+              <span>${d}</span>
+              ${dotHtml}
+            </button>
+          `;
+        }
+
+        const habits = sortedHabits();
+        const dayInfo = getDayCompletionInfo(state.selectedDate);
+        const habitsHtml = habits.length === 0
+          ? `<div class="bg-white rounded-2xl p-6 text-center border border-slate-200">
+               <p class="text-sm text-slate-500 mb-3">No habits yet. Add your first habit to start tracking.</p>
+               <button id="empty-add-btn" type="button" class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-medium">Add Habit</button>
+             </div>`
+          : habits.map(h => {
+              const done = isHabitCompletedOn(h.id, state.selectedDate);
+              return `
+                <button type="button" data-toggle-habit="${h.id}"
+                  class="habit-toggle w-full bg-white rounded-2xl px-4 py-3.5 border ${done ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200'} flex items-center justify-between gap-3 shadow-sm active:scale-[0.99] transition text-left">
+                  <div class="flex items-center gap-3 min-w-0">
+                    <span class="w-3 h-3 rounded-full shrink-0" style="background-color:${h.color}"></span>
+                    <span class="text-sm font-medium truncate ${done ? 'line-through text-slate-400' : 'text-slate-800'}">${escapeHtml(h.name)}</span>
+                  </div>
+                  <div class="w-6 h-6 rounded-lg flex items-center justify-center shrink-0 transition ${done ? 'bg-emerald-500 text-white' : 'border-2 border-slate-300 bg-white'}">
+                    ${done ? '<i data-lucide="check" class="w-4 h-4"></i>' : ''}
+                  </div>
+                </button>
+              `;
+            }).join('');
+
+        main.innerHTML = `
+          <div class="p-4 space-y-4">
+            <!-- Calendar Card -->
+            <section class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
+              <div class="flex items-center justify-between mb-3">
+                <button id="prev-month-btn" type="button" aria-label="Previous Month" class="p-2 rounded-xl hover:bg-slate-100 text-slate-600">
+                  <i data-lucide="chevron-left" class="w-5 h-5"></i>
+                </button>
+                <div class="text-sm font-semibold text-slate-800">${MONTH_NAMES[m]} ${y}</div>
+                <button id="next-month-btn" type="button" aria-label="Next Month" class="p-2 rounded-xl hover:bg-slate-100 text-slate-600">
+                  <i data-lucide="chevron-right" class="w-5 h-5"></i>
+                </button>
+              </div>
+              <div class="grid grid-cols-7 gap-1 text-center text-[11px] font-medium text-slate-400 mb-1.5">
+                <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+              </div>
+              <div class="grid grid-cols-7 gap-1">
+                ${cellsHtml}
+              </div>
+              <div class="flex items-center justify-center gap-4 mt-3 pt-3 border-t border-slate-100 text-[11px] text-slate-500">
+                <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>All tracked</span>
+                <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>Partial</span>
+                <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-indigo-600"></span>Selected</span>
+              </div>
+            </section>
+
+            <!-- Daily Habits List -->
+            <section class="space-y-2.5">
+              <div class="flex items-center justify-between px-1">
+                <h2 class="text-sm font-semibold text-slate-800">Habits for ${formatDisplayDate(state.selectedDate)}</h2>
+                <span class="text-xs font-semibold px-2.5 py-1 rounded-full ${dayInfo.allDone && dayInfo.total > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-700'}">
+                  ${dayInfo.completed}/${dayInfo.total}
+                </span>
+              </div>
+              <div class="space-y-2">
+                ${habitsHtml}
+              </div>
+            </section>
+          </div>
+        `;
+
+        document.getElementById('prev-month-btn').addEventListener('click', () => {
+          if (state.calendarMonth === 0) { state.calendarMonth = 11; state.calendarYear--; }
+          else state.calendarMonth--;
+          render();
+        });
+        document.getElementById('next-month-btn').addEventListener('click', () => {
+          if (state.calendarMonth === 11) { state.calendarMonth = 0; state.calendarYear++; }
+          else state.calendarMonth++;
+          render();
+        });
+        main.querySelectorAll('.cal-day').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const d = btn.getAttribute('data-date');
+            if (d && d <= todayIso) {
+              state.selectedDate = d;
+              render();
+            }
+          });
+        });
+        main.querySelectorAll('.habit-toggle').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const id = Number(btn.getAttribute('data-toggle-habit'));
+            toggleHabitCompletion(id, state.selectedDate);
+          });
+        });
+        const emptyAdd = document.getElementById('empty-add-btn');
+        if (emptyAdd) emptyAdd.addEventListener('click', () => openHabitModal(null));
+      }
+
+      function renderManageHabits(main) {
+        const habits = sortedHabits();
+        const itemsHtml = habits.length === 0
+          ? `<div class="bg-white rounded-2xl p-6 text-center border border-slate-200 text-sm text-slate-500">
+               No habits added yet. Tap <strong>Add Habit</strong> above to create one.
+             </div>`
+          : habits.map((h, idx) => `
+              <div class="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-sm flex items-center justify-between gap-2">
+                <div class="flex items-center gap-3 min-w-0">
+                  <div class="flex flex-col gap-0.5 shrink-0">
+                    <button type="button" data-move-up="${h.id}" ${idx === 0 ? 'disabled' : ''} aria-label="Move Up"
+                      class="p-0.5 rounded text-slate-400 hover:text-indigo-600 disabled:opacity-25">
+                      <i data-lucide="chevron-up" class="w-4 h-4"></i>
+                    </button>
+                    <button type="button" data-move-down="${h.id}" ${idx === habits.length - 1 ? 'disabled' : ''} aria-label="Move Down"
+                      class="p-0.5 rounded text-slate-400 hover:text-indigo-600 disabled:opacity-25">
+                      <i data-lucide="chevron-down" class="w-4 h-4"></i>
+                    </button>
+                  </div>
+                  <span class="w-3.5 h-3.5 rounded-full shrink-0" style="background-color:${h.color}"></span>
+                  <div class="min-w-0">
+                    <div class="text-sm font-medium text-slate-800 truncate">${escapeHtml(h.name)}</div>
+                    <div class="text-[11px] text-slate-400">Added ${h.createdAt || todayIso}</div>
+                  </div>
+                </div>
+                <div class="flex items-center gap-1 shrink-0">
+                  <button type="button" data-edit-habit="${h.id}" aria-label="Edit Habit" class="p-2 rounded-xl text-slate-500 hover:bg-slate-100 hover:text-indigo-600">
+                    <i data-lucide="pencil" class="w-4 h-4"></i>
+                  </button>
+                  <button type="button" data-delete-habit="${h.id}" aria-label="Delete Habit" class="p-2 rounded-xl text-slate-500 hover:bg-rose-50 hover:text-rose-600">
+                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                  </button>
+                </div>
+              </div>
+            `).join('');
+
+        main.innerHTML = `
+          <div class="p-4 space-y-3">
+            <div class="flex items-center justify-between">
+              <p class="text-xs text-slate-500">Use arrows to reorder, or edit and delete habits.</p>
+              <button id="manage-add-btn" type="button" class="px-3.5 py-2 rounded-xl bg-indigo-600 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm hover:bg-indigo-700">
+                <i data-lucide="plus" class="w-4 h-4"></i>
+                <span>Add Habit</span>
+              </button>
+            </div>
+            <div class="space-y-2.5">${itemsHtml}</div>
+          </div>
+        `;
+
+        document.getElementById('manage-add-btn').addEventListener('click', () => openHabitModal(null));
+        main.querySelectorAll('[data-edit-habit]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const h = state.data.habits.find(x => x.id === Number(btn.getAttribute('data-edit-habit')));
+            if (h) openHabitModal(h);
+          });
+        });
+        main.querySelectorAll('[data-delete-habit]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const h = state.data.habits.find(x => x.id === Number(btn.getAttribute('data-delete-habit')));
+            if (h) openDeleteModal(h);
+          });
+        });
+        main.querySelectorAll('[data-move-up]').forEach(btn => {
+          btn.addEventListener('click', () => moveHabit(Number(btn.getAttribute('data-move-up')), -1));
+        });
+        main.querySelectorAll('[data-move-down]').forEach(btn => {
+          btn.addEventListener('click', () => moveHabit(Number(btn.getAttribute('data-move-down')), 1));
+        });
+      }
+
+      function moveHabit(id, delta) {
+        const list = sortedHabits();
+        const idx = list.findIndex(h => h.id === id);
+        const target = idx + delta;
+        if (idx < 0 || target < 0 || target >= list.length) return;
+        const [item] = list.splice(idx, 1);
+        list.splice(target, 0, item);
+        list.forEach((h, i) => { h.displayOrder = i; });
+        saveData();
+        render();
+      }
+
+      function renderAnalytics(main) {
+        const habits = sortedHabits();
+        const stats = computeAnalytics(state.analyticsHabitId, state.analyticsIsYearly, state.analyticsYear, state.analyticsMonth);
+        const totalPast = stats.completed + stats.incomplete;
+        const rate = totalPast > 0 ? Math.round((stats.completed / totalPast) * 100) : 0;
+        const onTrack = rate >= 60;
+
+        const yearOptions = [today.getFullYear() - 1, today.getFullYear(), today.getFullYear() + 1];
+        const periodSelectHtml = state.analyticsIsYearly
+          ? `<select id="analytics-year-select" class="px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-medium text-slate-700">
+               ${yearOptions.map(y => `<option value="${y}" ${y === state.analyticsYear ? 'selected' : ''}>${y}</option>`).join('')}
+             </select>`
+          : `<select id="analytics-month-select" class="px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-medium text-slate-700">
+               ${MONTH_NAMES.map((mn, i) => `<option value="${i}" ${i === state.analyticsMonth ? 'selected' : ''}>${mn} ${state.analyticsYear}</option>`).join('')}
+             </select>`;
+
+        const habitChips = [
+          `<button type="button" data-habit-filter="all" class="px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition ${state.analyticsHabitId === null ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 border border-slate-200'}">All Habits</button>`,
+          ...habits.map(h => `
+            <button type="button" data-habit-filter="${h.id}" class="px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition flex items-center gap-1.5 ${state.analyticsHabitId === h.id ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 border border-slate-200'}">
+              <span class="w-2 h-2 rounded-full" style="background-color:${state.analyticsHabitId === h.id ? '#fff' : h.color}"></span>
+              <span>${escapeHtml(h.name)}</span>
+            </button>
+          `)
+        ].join('');
+
+        main.innerHTML = `
+          <div class="p-4 space-y-4">
+            <!-- Filters -->
+            <div class="flex items-center justify-between gap-2">
+              <div class="inline-flex bg-slate-200 p-1 rounded-xl">
+                <button id="dur-monthly" type="button" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition ${!state.analyticsIsYearly ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'}">Monthly</button>
+                <button id="dur-yearly" type="button" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition ${state.analyticsIsYearly ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'}">Yearly</button>
+              </div>
+              ${periodSelectHtml}
+            </div>
+
+            <!-- Habit Chips -->
+            <div class="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+              ${habitChips}
+            </div>
+
+            <!-- Status & Streaks -->
+            <div class="grid grid-cols-2 gap-2.5">
+              <div class="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-sm">
+                <div class="text-[11px] font-medium text-slate-500">Current Streak</div>
+                <div class="text-xl font-bold text-amber-600 mt-1">${stats.currentStreak} <span class="text-xs font-medium text-slate-400">Days</span></div>
+              </div>
+              <div class="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-sm">
+                <div class="text-[11px] font-medium text-slate-500">Best Streak</div>
+                <div class="text-xl font-bold text-indigo-600 mt-1">${stats.bestStreak} <span class="text-xs font-medium text-slate-400">Days</span></div>
+              </div>
+            </div>
+
+            <!-- Stat Cards -->
+            <div class="grid grid-cols-3 gap-2.5">
+              <div class="bg-white rounded-2xl p-3 border border-slate-200 shadow-sm text-center">
+                <div class="text-[11px] font-medium text-slate-500">Completed</div>
+                <div class="text-lg font-bold text-emerald-600 mt-0.5">${stats.completed}</div>
+              </div>
+              <div class="bg-white rounded-2xl p-3 border border-slate-200 shadow-sm text-center">
+                <div class="text-[11px] font-medium text-slate-500">Incomplete</div>
+                <div class="text-lg font-bold text-rose-600 mt-0.5">${stats.incomplete}</div>
+              </div>
+              <div class="bg-white rounded-2xl p-3 border border-slate-200 shadow-sm text-center">
+                <div class="text-[11px] font-medium text-slate-500">Upcoming</div>
+                <div class="text-lg font-bold text-slate-500 mt-0.5">${stats.upcoming}</div>
+              </div>
+            </div>
+
+            <!-- Pie Chart -->
+            <section class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm">
+              <div class="flex items-center justify-between mb-3">
+                <h2 class="text-sm font-semibold text-slate-800">Completion Breakdown</h2>
+                <span class="text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${onTrack ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}">
+                  ${onTrack ? 'On Track' : 'Out of Track'} (${rate}%)
+                </span>
+              </div>
+              <div class="relative h-56">
+                <canvas id="analytics-pie-chart"></canvas>
+              </div>
+            </section>
+
+            <!-- Bar Chart (Yearly Breakdown) -->
+            ${state.analyticsIsYearly ? `
+              <section class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm">
+                <h2 class="text-sm font-semibold text-slate-800 mb-3">Monthly Progression (${state.analyticsYear})</h2>
+                <div class="relative h-60">
+                  <canvas id="analytics-bar-chart"></canvas>
+                </div>
+              </section>
+            ` : ''}
+          </div>
+        `;
+
+        document.getElementById('dur-monthly').addEventListener('click', () => { state.analyticsIsYearly = false; render(); });
+        document.getElementById('dur-yearly').addEventListener('click', () => { state.analyticsIsYearly = true; render(); });
+
+        const yrSel = document.getElementById('analytics-year-select');
+        if (yrSel) yrSel.addEventListener('change', (e) => { state.analyticsYear = Number(e.target.value); render(); });
+        const moSel = document.getElementById('analytics-month-select');
+        if (moSel) moSel.addEventListener('change', (e) => { state.analyticsMonth = Number(e.target.value); render(); });
+
+        main.querySelectorAll('[data-habit-filter]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const val = btn.getAttribute('data-habit-filter');
+            state.analyticsHabitId = val === 'all' ? null : Number(val);
+            render();
+          });
+        });
+
+        // Render Charts
+        if (window.Chart) {
+          if (state.pieChart) state.pieChart.destroy();
+          const pieCtx = document.getElementById('analytics-pie-chart').getContext('2d');
+          state.pieChart = new Chart(pieCtx, {
+            type: 'doughnut',
+            data: {
+              labels: ['Completed', 'Incomplete', 'Upcoming'],
+              datasets: [{
+                data: [stats.completed, stats.incomplete, stats.upcoming],
+                backgroundColor: ['#10B981', '#EF4444', '#CBD5E1'],
+                borderWidth: 0
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              cutout: '62%',
+              plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } }
+            }
+          });
+
+          if (state.analyticsIsYearly) {
+            if (state.barChart) state.barChart.destroy();
+            const barCtx = document.getElementById('analytics-bar-chart').getContext('2d');
+            state.barChart = new Chart(barCtx, {
+              type: 'bar',
+              data: {
+                labels: MONTH_SHORT,
+                datasets: [
+                  { label: 'Completed', data: stats.monthlyBreakdown.map(x => x.completed), backgroundColor: '#10B981', borderRadius: 4 },
+                  { label: 'Incomplete', data: stats.monthlyBreakdown.map(x => x.incomplete), backgroundColor: '#EF4444', borderRadius: 4 }
+                ]
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, beginAtZero: true } },
+                plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } }
+              }
+            });
+          }
+        }
+      }
+
+      function renderExport(main) {
+        const periodOptions = state.exportIsYearly
+          ? [String(today.getFullYear() - 1), String(today.getFullYear())]
+          : MONTH_NAMES.map((mn, i) => ({
+              value: `${today.getFullYear()}-${String(i + 1).padStart(2, '0')}`,
+              label: `${mn} ${today.getFullYear()}`
+            }));
+
+        if (state.exportIsYearly && !periodOptions.includes(state.exportPeriod)) {
+          state.exportPeriod = String(today.getFullYear());
+        } else if (!state.exportIsYearly && !periodOptions.some(o => o.value === state.exportPeriod)) {
+          state.exportPeriod = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+        }
+
+        const optionsHtml = state.exportIsYearly
+          ? periodOptions.map(y => `<option value="${y}" ${y === state.exportPeriod ? 'selected' : ''}>${y}</option>`).join('')
+          : periodOptions.map(o => `<option value="${o.value}" ${o.value === state.exportPeriod ? 'selected' : ''}>${o.label}</option>`).join('');
+
+        main.innerHTML = `
+          <div class="p-4 space-y-4">
+            <!-- Export Tracker Data -->
+            <section class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-4">
+              <div>
+                <h2 class="text-sm font-semibold text-slate-800">Export Tracker Data</h2>
+                <p class="text-xs text-slate-500 mt-0.5">Download your habit completion report as a CSV spreadsheet.</p>
+              </div>
+              <div class="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label class="block text-[11px] font-medium text-slate-500 mb-1">Duration</label>
+                  <select id="export-duration" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium bg-white">
+                    <option value="monthly" ${!state.exportIsYearly ? 'selected' : ''}>Monthly</option>
+                    <option value="yearly" ${state.exportIsYearly ? 'selected' : ''}>Yearly</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-[11px] font-medium text-slate-500 mb-1">Period</label>
+                  <select id="export-period" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium bg-white">
+                    ${optionsHtml}
+                  </select>
+                </div>
+              </div>
+              <button id="export-csv-btn" type="button" class="w-full py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 flex items-center justify-center gap-2">
+                <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
+                <span>Export CSV Report</span>
+              </button>
+            </section>
+
+            <!-- Backup & Restore -->
+            <section class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
+              <div>
+                <h2 class="text-sm font-semibold text-slate-800">Backup &amp; Restore</h2>
+                <p class="text-xs text-slate-500 mt-0.5">Save a JSON backup of all habits and logs, or restore from a file.</p>
+              </div>
+              <div class="grid grid-cols-2 gap-2.5">
+                <button id="backup-json-btn" type="button" class="py-2.5 px-3 rounded-xl bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 flex items-center justify-center gap-1.5">
+                  <i data-lucide="download" class="w-4 h-4"></i>
+                  <span>Backup JSON</span>
+                </button>
+                <label class="py-2.5 px-3 rounded-xl bg-slate-100 text-slate-700 text-xs font-semibold hover:bg-slate-200 flex items-center justify-center gap-1.5 cursor-pointer">
+                  <i data-lucide="upload" class="w-4 h-4"></i>
+                  <span>Restore Data</span>
+                  <input id="restore-json-input" type="file" accept=".json,application/json" class="hidden" />
+                </label>
+              </div>
+            </section>
+          </div>
+        `;
+
+        document.getElementById('export-duration').addEventListener('change', (e) => {
+          state.exportIsYearly = e.target.value === 'yearly';
+          render();
+        });
+        document.getElementById('export-period').addEventListener('change', (e) => {
+          state.exportPeriod = e.target.value;
+        });
+        document.getElementById('export-csv-btn').addEventListener('click', exportCsvReport);
+        document.getElementById('backup-json-btn').addEventListener('click', backupJson);
+        document.getElementById('restore-json-input').addEventListener('change', restoreJson);
+      }
+
+      function downloadBlob(content, filename, mime) {
+        const blob = new Blob([content], { type: mime });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      }
+
+      function exportCsvReport() {
+        const habits = sortedHabits();
+        let startDates = [];
+        if (state.exportIsYearly) {
+          const y = Number(state.exportPeriod);
+          for (let m = 0; m < 12; m++) {
+            const days = new Date(y, m + 1, 0).getDate();
+            for (let d = 1; d <= days; d++) {
+              startDates.push(`${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
+            }
+          }
+        } else {
+          const [y, m] = state.exportPeriod.split('-').map(Number);
+          const days = new Date(y, m, 0).getDate();
+          for (let d = 1; d <= days; d++) {
+            startDates.push(`${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
+          }
+        }
+
+        const header = ['Habit', ...startDates, 'Total Count'];
+        const rows = [header.join(',')];
+        for (const h of habits) {
+          let total = 0;
+          const cells = startDates.map(dt => {
+            const done = isHabitCompletedOn(h.id, dt);
+            if (done) total++;
+            return done ? '1' : '0';
+          });
+          rows.push([`"${h.name.replace(/"/g, '""')}"`, ...cells, total].join(','));
+        }
+        downloadBlob(rows.join('\n'), `HabitTracker_${state.exportPeriod}.csv`, 'text/csv;charset=utf-8;');
+        showToast('CSV report downloaded');
+      }
+
+      function backupJson() {
+        const payload = JSON.stringify({ habits: state.data.habits, logs: state.data.logs }, null, 2);
+        downloadBlob(payload, `HabitTracker_Backup_${todayIso}.json`, 'application/json');
+        showToast('Backup downloaded');
+      }
+
+      function restoreJson(e) {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            const parsed = JSON.parse(String(reader.result));
+            if (Array.isArray(parsed.habits) && Array.isArray(parsed.logs)) {
+              state.data = { habits: parsed.habits, logs: parsed.logs };
+              saveData();
+              showToast('Data restored successfully');
+              render();
+            } else {
+              showToast('Invalid backup format');
+            }
+          } catch (err) {
+            showToast('Could not read backup file');
+          }
+        };
+        reader.readAsText(file);
+      }
+
+      function escapeHtml(str) {
+        return String(str).replace(/[&<>"']/g, s => ({
+          '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[s]));
+      }
+
+      function render() {
+        const titles = {
+          Dashboard: 'Habit Tracker',
+          ManageHabits: 'Manage Habits',
+          Analytics: 'Analytics',
+          Export: 'Export & Backup'
+        };
+        document.getElementById('top-bar-title').textContent = titles[state.screen] || 'Habit Tracker';
+
+        document.querySelectorAll('.drawer-item').forEach(el => {
+          const active = el.getAttribute('data-screen') === state.screen;
+          el.className = `drawer-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition ${active ? 'bg-indigo-50 text-indigo-700' : 'text-slate-700 hover:bg-slate-100'}`;
+        });
+        document.querySelectorAll('.bottom-nav-item').forEach(el => {
+          const active = el.getAttribute('data-screen') === state.screen;
+          el.className = `bottom-nav-item flex flex-col items-center justify-center gap-1 text-xs font-medium transition ${active ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`;
+        });
+
+        const main = document.getElementById('main-content');
+        if (state.screen === 'Dashboard') renderDashboard(main);
+        else if (state.screen === 'ManageHabits') renderManageHabits(main);
+        else if (state.screen === 'Analytics') renderAnalytics(main);
+        else if (state.screen === 'Export') renderExport(main);
+
+        if (window.lucide) lucide.createIcons();
+      }
+
+      render();
+    })();
+  </script>
+</body>
+</html>
