@@ -35,7 +35,7 @@
         </button>
         <h1 id="top-bar-title" class="text-lg font-semibold tracking-tight">Habit Tracker</h1>
       </div>
-      <div id="top-bar-actions" class="flex items-center gap-1"></div>
+      <div id="top-bar-actions" class="flex items-center gap-1.5"></div>
     </header>
 
     <!-- Slide-out Navigation Drawer -->
@@ -46,7 +46,7 @@
           <i data-lucide="check-circle-2" class="w-6 h-6 text-white"></i>
         </div>
         <div class="text-lg font-bold">Habit Tracker</div>
-        <div class="text-xs text-indigo-100 mt-0.5">Daily routines &amp; progress</div>
+        <div id="drawer-user-subtitle" class="text-xs text-indigo-100 mt-0.5 truncate">Daily routines &amp; progress</div>
       </div>
       <nav class="p-3 space-y-1 flex-1">
         <button type="button" data-screen="Dashboard" class="drawer-item w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition">
@@ -66,9 +66,7 @@
           <span>Export &amp; Backup</span>
         </button>
       </nav>
-      <div class="p-4 border-t border-slate-100 text-xs text-slate-400">
-        Saved locally on this device
-      </div>
+      <div id="drawer-sync-footer" class="p-4 border-t border-slate-100 space-y-2.5"></div>
     </aside>
 
     <!-- Main Content Area -->
@@ -129,12 +127,23 @@
     </div>
 
     <!-- Toast Notification -->
-    <div id="toast" class="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white text-xs font-medium px-4 py-2.5 rounded-full shadow-lg opacity-0 pointer-events-none transition-opacity duration-200"></div>
+    <div id="toast" class="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white text-xs font-medium px-4 py-2.5 rounded-full shadow-lg opacity-0 pointer-events-none transition-opacity duration-200 max-w-[90vw] text-center"></div>
   </div>
 
   <script>
     (function () {
       const STORAGE_KEY = 'uv_habit_tracker_v1';
+      const FIREBASE_CONFIG = {
+        apiKey: "AIzaSyAL_GePy194R5CptRZufrrg9KJSM-Mk0vA",
+        authDomain: "habit-tracker-77e80.firebaseapp.com",
+        projectId: "habit-tracker-77e80",
+        storageBucket: "habit-tracker-77e80.firebasestorage.app",
+        messagingSenderId: "713002526655",
+        appId: "1:713002526655:web:92c8c75f59893d7d4a230a",
+        measurementId: "G-1NE9VQ4ZEF"
+      };
+      const FIREBASE_SDK_VERSION = '13.4.0';
+
       const COLORS = [
         '#4F46E5', '#10B981', '#F59E0B', '#EF4444',
         '#8B5CF6', '#06B6D4', '#EC4899', '#14B8A6'
@@ -173,7 +182,8 @@
           { id: 4, name: 'Read books and articles', color: '#06B6D4', createdAt: todayIso, displayOrder: 3 },
           { id: 5, name: 'Have healthy morning drink', color: '#F59E0B', createdAt: todayIso, displayOrder: 4 }
         ],
-        logs: []
+        logs: [],
+        updatedAt: 0
       };
 
       function loadData() {
@@ -182,16 +192,14 @@
           if (!raw) return JSON.parse(JSON.stringify(DEFAULT_DATA));
           const parsed = JSON.parse(raw);
           if (Array.isArray(parsed.habits) && Array.isArray(parsed.logs)) {
-            return parsed;
+            return {
+              habits: parsed.habits,
+              logs: parsed.logs,
+              updatedAt: typeof parsed.updatedAt === 'number' ? parsed.updatedAt : 0
+            };
           }
         } catch (e) { /* fallback */ }
         return JSON.parse(JSON.stringify(DEFAULT_DATA));
-      }
-
-      function saveData() {
-        try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(state.data));
-        } catch (e) { /* ignore storage quota errors */ }
       }
 
       const state = {
@@ -200,7 +208,7 @@
         selectedDate: todayIso,
         calendarYear: today.getFullYear(),
         calendarMonth: today.getMonth(),
-        analyticsHabitId: null, // null = All Habits
+        analyticsHabitId: null,
         analyticsIsYearly: false,
         analyticsYear: today.getFullYear(),
         analyticsMonth: today.getMonth(),
@@ -210,8 +218,290 @@
         deletingHabitId: null,
         modalColor: COLORS[0],
         pieChart: null,
-        barChart: null
+        barChart: null,
+        // Firebase cloud sync state
+        fbReady: false,
+        fbUser: null,
+        syncStatus: 'local', // 'local' | 'syncing' | 'synced' | 'error'
+        lastSyncedAt: null,
+        syncError: ''
       };
+
+      let fb = null; // { auth, db, authMod, fsMod }
+      let unsubscribeSnapshot = null;
+      let applyingRemote = false;
+
+      function saveLocalOnly() {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(state.data));
+        } catch (e) { /* ignore storage quota errors */ }
+      }
+
+      function saveData() {
+        state.data.updatedAt = Date.now();
+        saveLocalOnly();
+        if (state.fbUser && !applyingRemote) {
+          pushToCloud();
+        }
+      }
+
+      async function pushToCloud() {
+        if (!fb || !state.fbUser) return;
+        state.syncStatus = 'syncing';
+        state.syncError = '';
+        updateSyncChrome();
+        try {
+          const ref = fb.fsMod.doc(fb.db, 'users', state.fbUser.uid, 'data', 'habitTracker');
+          await fb.fsMod.setDoc(ref, {
+            habits: state.data.habits,
+            logs: state.data.logs,
+            updatedAt: state.data.updatedAt || Date.now()
+          }, { merge: true });
+          state.syncStatus = 'synced';
+          state.lastSyncedAt = new Date();
+          updateSyncChrome();
+        } catch (err) {
+          state.syncStatus = 'error';
+          state.syncError = (err && err.code) ? err.code : 'Sync failed';
+          updateSyncChrome();
+        }
+      }
+
+      function detachCloudListener() {
+        if (typeof unsubscribeSnapshot === 'function') {
+          unsubscribeSnapshot();
+          unsubscribeSnapshot = null;
+        }
+      }
+
+      async function attachCloudSync(user) {
+        detachCloudListener();
+        if (!fb || !user) return;
+        state.syncStatus = 'syncing';
+        state.syncError = '';
+        updateSyncChrome();
+        const ref = fb.fsMod.doc(fb.db, 'users', user.uid, 'data', 'habitTracker');
+        try {
+          const snap = await fb.fsMod.getDoc(ref);
+          if (snap.exists()) {
+            const remote = snap.data();
+            const remoteUpdated = typeof remote.updatedAt === 'number' ? remote.updatedAt : 0;
+            const localUpdated = typeof state.data.updatedAt === 'number' ? state.data.updatedAt : 0;
+            const localHasRealData = state.data.logs.length > 0 || localUpdated > 0;
+            if (!localHasRealData || remoteUpdated >= localUpdated) {
+              applyingRemote = true;
+              state.data = {
+                habits: Array.isArray(remote.habits) ? remote.habits : [],
+                logs: Array.isArray(remote.logs) ? remote.logs : [],
+                updatedAt: remoteUpdated
+              };
+              saveLocalOnly();
+              applyingRemote = false;
+              if ('serviceWorker' in navigator && location.protocol === 'https:') {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('./sw.js').catch(() => {});
+        });
+      }
+      render();
+            } else {
+              await pushToCloud();
+            }
+          } else {
+            await pushToCloud();
+          }
+
+          state.syncStatus = 'synced';
+          state.lastSyncedAt = new Date();
+          updateSyncChrome();
+
+          unsubscribeSnapshot = fb.fsMod.onSnapshot(ref, (docSnap) => {
+            if (!docSnap.exists() || docSnap.metadata.hasPendingWrites) return;
+            const remote = docSnap.data();
+            const remoteUpdated = typeof remote.updatedAt === 'number' ? remote.updatedAt : 0;
+            if (remoteUpdated > (state.data.updatedAt || 0)) {
+              applyingRemote = true;
+              state.data = {
+                habits: Array.isArray(remote.habits) ? remote.habits : [],
+                logs: Array.isArray(remote.logs) ? remote.logs : [],
+                updatedAt: remoteUpdated
+              };
+              saveLocalOnly();
+              applyingRemote = false;
+              state.syncStatus = 'synced';
+              state.lastSyncedAt = new Date();
+              render();
+            }
+          }, (err) => {
+            state.syncStatus = 'error';
+            state.syncError = (err && err.code) ? err.code : 'Listener error';
+            updateSyncChrome();
+          });
+        } catch (err) {
+          state.syncStatus = 'error';
+          state.syncError = (err && err.code) ? err.code : 'Could not connect';
+          updateSyncChrome();
+        }
+      }
+
+      async function handleGoogleSignIn() {
+        if (!fb) {
+          showToast('Cloud sync is loading — check your internet connection');
+          return;
+        }
+        try {
+          const provider = new fb.authMod.GoogleAuthProvider();
+          provider.setCustomParameters({ prompt: 'select_account' });
+          await fb.authMod.signInWithPopup(fb.auth, provider);
+          showToast('Signed in — cloud sync active');
+        } catch (err) {
+          const code = err && err.code ? err.code : '';
+          if (code === 'auth/popup-blocked' || code === 'auth/operation-not-supported-in-this-environment') {
+            try {
+              const provider = new fb.authMod.GoogleAuthProvider();
+              await fb.authMod.signInWithRedirect(fb.auth, provider);
+            } catch (e2) {
+              showToast('Sign-in unavailable in this view — open on GitHub Pages');
+            }
+          } else if (code === 'auth/unauthorized-domain') {
+            showToast('Add this domain in Firebase Auth → Authorized domains');
+          } else if (code !== 'auth/popup-closed-by-user' && code !== 'auth/cancelled-popup-request') {
+            showToast('Sign-in failed: ' + (code || 'check Firebase settings'));
+          }
+        }
+      }
+
+      async function handleSignOut() {
+        if (!fb) return;
+        try {
+          detachCloudListener();
+          await fb.authMod.signOut(fb.auth);
+          state.fbUser = null;
+          state.syncStatus = 'local';
+          state.syncError = '';
+          showToast('Signed out — using local storage');
+          render();
+        } catch (err) {
+          showToast('Could not sign out');
+        }
+      }
+
+      async function initFirebase() {
+        try {
+          const base = `https://www.gstatic.com/firebasejs/${FIREBASE_SDK_VERSION}`;
+          const [appMod, authMod, fsMod] = await Promise.all([
+            import(`${base}/firebase-app.js`),
+            import(`${base}/firebase-auth.js`),
+            import(`${base}/firebase-firestore.js`)
+          ]);
+          const app = appMod.initializeApp(FIREBASE_CONFIG);
+          const auth = authMod.getAuth(app);
+          const db = fsMod.getFirestore(app);
+          fb = { app, auth, db, authMod, fsMod };
+          state.fbReady = true;
+
+          try {
+            await authMod.getRedirectResult(auth);
+          } catch (e) { /* ignore redirect check error */ }
+
+          authMod.onAuthStateChanged(auth, (user) => {
+            state.fbUser = user || null;
+            if (user) {
+              attachCloudSync(user);
+            } else {
+              detachCloudListener();
+              state.syncStatus = 'local';
+              updateSyncChrome();
+              if (state.screen === 'Export') render();
+            }
+          });
+          updateSyncChrome();
+        } catch (err) {
+          state.fbReady = false;
+          updateSyncChrome();
+        }
+      }
+
+      function syncBadgeMeta() {
+        if (!state.fbUser) {
+          return { dot: 'bg-slate-300', label: 'Local only' };
+        }
+        if (state.syncStatus === 'syncing') {
+          return { dot: 'bg-amber-400 animate-pulse', label: 'Syncing...' };
+        }
+        if (state.syncStatus === 'error') {
+          return { dot: 'bg-rose-400', label: 'Sync error' };
+        }
+        return { dot: 'bg-emerald-400', label: 'Synced' };
+      }
+
+      function updateSyncChrome() {
+        const meta = syncBadgeMeta();
+        const topActions = document.getElementById('top-bar-actions');
+        if (topActions) {
+          if (state.fbUser) {
+            const initial = (state.fbUser.displayName || state.fbUser.email || 'U').charAt(0).toUpperCase();
+            topActions.innerHTML = `
+              <button id="top-sync-btn" type="button" aria-label="Cloud Sync Status"
+                class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/15 hover:bg-white/25 text-xs font-medium transition">
+                <span class="w-2 h-2 rounded-full ${meta.dot}"></span>
+                <span class="max-w-[70px] truncate">${meta.label}</span>
+                <span class="w-5 h-5 rounded-full bg-white text-indigo-700 font-bold text-[11px] flex items-center justify-center">${escapeHtml(initial)}</span>
+              </button>
+            `;
+            document.getElementById('top-sync-btn').addEventListener('click', () => {
+              state.screen = 'Export';
+              render();
+            });
+          } else {
+            topActions.innerHTML = `
+              <button id="top-signin-btn" type="button"
+                class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/15 hover:bg-white/25 text-xs font-medium transition">
+                <i data-lucide="cloud" class="w-3.5 h-3.5"></i>
+                <span>Sign in</span>
+              </button>
+            `;
+            document.getElementById('top-signin-btn').addEventListener('click', handleGoogleSignIn);
+          }
+        }
+
+        const sub = document.getElementById('drawer-user-subtitle');
+        if (sub) {
+          sub.textContent = state.fbUser
+            ? (state.fbUser.email || state.fbUser.displayName || 'Signed in')
+            : 'Daily routines & progress';
+        }
+
+        const footer = document.getElementById('drawer-sync-footer');
+        if (footer) {
+          if (state.fbUser) {
+            footer.innerHTML = `
+              <div class="flex items-center justify-between text-xs">
+                <span class="flex items-center gap-1.5 text-slate-600 font-medium">
+                  <span class="w-2 h-2 rounded-full ${meta.dot}"></span>
+                  <span>${meta.label}</span>
+                </span>
+                <button id="drawer-sync-now" type="button" class="text-indigo-600 font-semibold hover:underline">Sync now</button>
+              </div>
+              <button id="drawer-signout-btn" type="button" class="w-full py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold flex items-center justify-center gap-1.5">
+                <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+                <span>Sign out</span>
+              </button>
+            `;
+            document.getElementById('drawer-sync-now').addEventListener('click', () => { pushToCloud(); showToast('Syncing with cloud...'); });
+            document.getElementById('drawer-signout-btn').addEventListener('click', () => { closeDrawer(); handleSignOut(); });
+          } else {
+            footer.innerHTML = `
+              <div class="text-[11px] text-slate-400">Saved locally on this device</div>
+              <button id="drawer-signin-btn" type="button" class="w-full py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold flex items-center justify-center gap-1.5">
+                <i data-lucide="cloud" class="w-3.5 h-3.5"></i>
+                <span>Sign in with Google</span>
+              </button>
+            `;
+            document.getElementById('drawer-signin-btn').addEventListener('click', () => { closeDrawer(); handleGoogleSignIn(); });
+          }
+        }
+        if (window.lucide) lucide.createIcons();
+      }
 
       function showToast(msg) {
         const el = document.getElementById('toast');
@@ -222,7 +512,7 @@
         state._toastTimer = setTimeout(() => {
           el.classList.remove('opacity-100');
           el.classList.add('opacity-0');
-        }, 2500);
+        }, 2800);
       }
 
       function sortedHabits() {
@@ -243,12 +533,7 @@
           state.data.logs.push({ logId: nextLogId, habitId, date: dateIso, isCompleted: true });
         }
         saveData();
-        if ('serviceWorker' in navigator && location.protocol === 'https:') {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./sw.js').catch(() => {});
-        });
-      }
-      render();
+        render();
       }
 
       function getDayCompletionInfo(dateIso) {
@@ -410,11 +695,9 @@
           monthlyBreakdown.push({ month: m, completed: mComp, incomplete: mInc, upcoming: mUpc });
         }
 
-        // Streaks: consecutive days up to today where all selected habits were completed
         let currentStreak = 0;
         let bestStreak = 0;
         let running = 0;
-        // Scan last 365 days up to today
         const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 364);
         for (let i = 0; i < 365; i++) {
           const cur = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
@@ -427,7 +710,6 @@
             if (iso < todayIso) running = 0;
           }
         }
-        // Current streak: count backwards from today (or yesterday if today isn't finished yet)
         let checkDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
         const todayDone = habits.every(h => isHabitCompletedOn(h.id, toIsoDate(checkDate)));
         if (!todayDone) {
@@ -775,7 +1057,6 @@
           });
         });
 
-        // Render Charts
         if (window.Chart) {
           if (state.pieChart) state.pieChart.destroy();
           const pieCtx = document.getElementById('analytics-pie-chart').getContext('2d');
@@ -838,8 +1119,53 @@
           ? periodOptions.map(y => `<option value="${y}" ${y === state.exportPeriod ? 'selected' : ''}>${y}</option>`).join('')
           : periodOptions.map(o => `<option value="${o.value}" ${o.value === state.exportPeriod ? 'selected' : ''}>${o.label}</option>`).join('');
 
+        const meta = syncBadgeMeta();
+        const lastSyncStr = state.lastSyncedAt
+          ? state.lastSyncedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          : 'Not synced yet';
+
+        const cloudSectionHtml = state.fbUser
+          ? `
+            <div class="flex items-center justify-between gap-2 bg-slate-50 rounded-xl p-3 border border-slate-200">
+              <div class="min-w-0">
+                <div class="text-xs font-semibold text-slate-800 truncate">${escapeHtml(state.fbUser.displayName || 'Google Account')}</div>
+                <div class="text-[11px] text-slate-500 truncate">${escapeHtml(state.fbUser.email || '')}</div>
+              </div>
+              <span class="shrink-0 inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-white border border-slate-200 text-slate-700">
+                <span class="w-2 h-2 rounded-full ${meta.dot}"></span>
+                <span>${meta.label}</span>
+              </span>
+            </div>
+            ${state.syncError ? `<div class="text-[11px] text-rose-600">Error: ${escapeHtml(state.syncError)}</div>` : `<div class="text-[11px] text-slate-400">Last synced: ${lastSyncStr}</div>`}
+            <div class="grid grid-cols-2 gap-2.5">
+              <button id="export-sync-now-btn" type="button" class="py-2.5 px-3 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 flex items-center justify-center gap-1.5">
+                <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                <span>Sync Now</span>
+              </button>
+              <button id="export-signout-btn" type="button" class="py-2.5 px-3 rounded-xl bg-slate-100 text-slate-700 text-xs font-semibold hover:bg-slate-200 flex items-center justify-center gap-1.5">
+                <i data-lucide="log-out" class="w-4 h-4"></i>
+                <span>Sign Out</span>
+              </button>
+            </div>
+          `
+          : `
+            <button id="export-signin-btn" type="button" class="w-full py-2.5 px-3 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 flex items-center justify-center gap-2">
+              <i data-lucide="cloud" class="w-4 h-4"></i>
+              <span>Sign in with Google to Sync</span>
+            </button>
+          `;
+
         main.innerHTML = `
           <div class="p-4 space-y-4">
+            <!-- Firebase Cloud Sync -->
+            <section class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
+              <div>
+                <h2 class="text-sm font-semibold text-slate-800">Cloud Sync (Firebase)</h2>
+                <p class="text-xs text-slate-500 mt-0.5">Automatically sync habits and logs across your devices using your Google account.</p>
+              </div>
+              ${cloudSectionHtml}
+            </section>
+
             <!-- Export Tracker Data -->
             <section class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-4">
               <div>
@@ -887,6 +1213,13 @@
             </section>
           </div>
         `;
+
+        const signInBtn = document.getElementById('export-signin-btn');
+        if (signInBtn) signInBtn.addEventListener('click', handleGoogleSignIn);
+        const syncNowBtn = document.getElementById('export-sync-now-btn');
+        if (syncNowBtn) syncNowBtn.addEventListener('click', () => { pushToCloud(); showToast('Syncing with cloud...'); });
+        const signOutBtn = document.getElementById('export-signout-btn');
+        if (signOutBtn) signOutBtn.addEventListener('click', handleSignOut);
 
         document.getElementById('export-duration').addEventListener('change', (e) => {
           state.exportIsYearly = e.target.value === 'yearly';
@@ -960,7 +1293,7 @@
           try {
             const parsed = JSON.parse(String(reader.result));
             if (Array.isArray(parsed.habits) && Array.isArray(parsed.logs)) {
-              state.data = { habits: parsed.habits, logs: parsed.logs };
+              state.data = { habits: parsed.habits, logs: parsed.logs, updatedAt: Date.now() };
               saveData();
               showToast('Data restored successfully');
               render();
@@ -1004,10 +1337,12 @@
         else if (state.screen === 'Analytics') renderAnalytics(main);
         else if (state.screen === 'Export') renderExport(main);
 
+        updateSyncChrome();
         if (window.lucide) lucide.createIcons();
       }
 
       render();
+      initFirebase();
     })();
   </script>
 </body>
